@@ -100,4 +100,4 @@ Source layout (`src/repo_rename/`):
 | `git.py`      | Listing the repo's files with `git ls-files`                      |
 | `contents.py` | Rewriting file contents in parallel, with atomic writes           |
 | `paths.py`    | Planning, conflict-checking and applying file/directory renames   |
-| `errors.py`   | User-facing error types                                           |
+| `errors/`     | User-facing error types, one module per error                     |

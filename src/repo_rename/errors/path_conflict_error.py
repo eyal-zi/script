@@ -1,18 +1,6 @@
-"""Errors the user can fix. The CLI reports them without a traceback."""
-
 from collections.abc import Iterable
 
-
-class RepoRenameError(Exception):
-    """Base class for all expected errors."""
-
-
-class ConfigError(RepoRenameError):
-    """The renames file can't be read or is invalid."""
-
-
-class GitError(RepoRenameError):
-    """A git command failed, e.g. because the path isn't inside a git work tree."""
+from repo_rename.errors.repo_rename_error import RepoRenameError
 
 
 class PathConflictError(RepoRenameError):
