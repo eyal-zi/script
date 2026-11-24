@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "repo-rename"
+version = "0.1.0"
+description = "Rename names across a git repository: file contents, file names and directory names."
+readme = { file = "README.MD", content-type = "text/markdown" }
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6",
+    "rich>=13.7",
+    "typer>=0.12",
+]
+
+[project.scripts]
+repo-rename = "repo_rename.cli:app"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_rename"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF", "PT", "N", "RET", "PERF"]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
