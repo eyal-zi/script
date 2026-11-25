@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError, m
 
 from repo_rename.errors import ConfigError
 
-NonEmptyStr = Annotated[str, Field(min_length=1)]
+_NonEmptyStr = Annotated[str, Field(min_length=1)]
 
 
 class Rename(BaseModel):
@@ -16,8 +16,8 @@ class Rename(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    old: NonEmptyStr
-    new: NonEmptyStr
+    old: _NonEmptyStr
+    new: _NonEmptyStr
 
     @model_validator(mode="after")
     def _old_differs_from_new(self) -> "Rename":
@@ -39,18 +39,18 @@ class RenameList(RootModel[list[Rename]]):
         return self
 
 
-def load_renames(path: Path) -> dict[str, str]:
+def load_rules(path: Path) -> dict[str, str]:
     """Read the renames file and return its rules as an ordered ``{old: new}`` mapping."""
     try:
         rules = RenameList.model_validate_json(path.read_bytes()).root
     except OSError as error:
         raise ConfigError(f"cannot read {path}: {error.strerror}") from error
     except ValidationError as error:
-        raise ConfigError(f"invalid {path.name}:\n{_describe(error)}") from None
+        raise ConfigError(f"invalid {path}:\n{_format_issues(error)}") from None
     return {rule.old: rule.new for rule in rules}
 
 
-def _describe(error: ValidationError) -> str:
+def _format_issues(error: ValidationError) -> str:
     """Format validation issues one per line, e.g. ``  0.new: Field required``."""
     return "\n".join(
         f"  {'.'.join(map(str, issue['loc'])) or '<root>'}: {issue['msg']}"

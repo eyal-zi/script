@@ -17,7 +17,7 @@ _SEPARATOR = re.compile(r"[_\- ]")
 
 # Order matters: when several styles spell the old name identically (always true for
 # one-word names), the first of them decides how the new name is spelled.
-CASE_STYLES: Mapping[str, Callable[[list[str]], str]] = {
+_CASE_STYLES: Mapping[str, Callable[[list[str]], str]] = {
     "snake_case": lambda words: "_".join(words),
     "SCREAMING_SNAKE_CASE": lambda words: "_".join(words).upper(),
     "camelCase": lambda words: words[0] + "".join(word.capitalize() for word in words[1:]),
@@ -43,14 +43,14 @@ def split_words(name: str) -> list[str] | None:
     return _SEPARATOR.split(_CAMEL_BOUNDARY.sub(" ", name).lower())
 
 
-def with_case_variants(renames: Mapping[str, str]) -> dict[str, str]:
-    """Return `renames` plus each ``old -> new`` pair re-spelled in every case style.
+def with_case_variants(rules: Mapping[str, str]) -> dict[str, str]:
+    """Return `rules` plus each ``old -> new`` pair re-spelled in every case style.
 
     Explicit rules always win over generated variants, and when two rules generate
     the same spelling, the earlier rule wins.
     """
-    expanded = dict(renames)
-    for old, new in renames.items():
+    expanded = dict(rules)
+    for old, new in rules.items():
         for old_variant, new_variant in _case_variants(old, new):
             if old_variant != new_variant:
                 expanded.setdefault(old_variant, new_variant)
@@ -61,5 +61,5 @@ def _case_variants(old: str, new: str) -> Iterator[tuple[str, str]]:
     old_words, new_words = split_words(old), split_words(new)
     if old_words is None or new_words is None:
         return
-    for style in CASE_STYLES.values():
+    for style in _CASE_STYLES.values():
         yield style(old_words), style(new_words)

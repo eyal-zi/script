@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from repo_rename.errors import PathConflictError
+from repo_rename.errors import PathRenameError
 from repo_rename.paths import PathRename, apply_renames, plan_renames
 from repo_rename.replacer import Replacer
 
@@ -27,7 +27,7 @@ def test_plans_deepest_paths_first_with_final_targets(tmp_path: Path) -> None:
 def test_applying_the_plan_moves_everything(tmp_path: Path) -> None:
     files = _touch(tmp_path, "a/training/training.py", "a/training/other.py")
     apply_renames(tmp_path, plan_renames(tmp_path, files, REPLACER))
-    assert sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.py")) == [
+    assert sorted(path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*.py")) == [
         "a/hello/hello.py",
         "a/hello/other.py",
     ]
@@ -35,19 +35,19 @@ def test_applying_the_plan_moves_everything(tmp_path: Path) -> None:
 
 def test_existing_destination_is_a_conflict(tmp_path: Path) -> None:
     files = _touch(tmp_path, "training.py", "hello.py")
-    with pytest.raises(PathConflictError, match=r"hello\.py already exists"):
+    with pytest.raises(PathRenameError, match=r"hello\.py already exists"):
         plan_renames(tmp_path, files, REPLACER)
 
 
 def test_two_paths_renamed_to_the_same_name_conflict(tmp_path: Path) -> None:
     files = _touch(tmp_path, "foo.py", "bar.py")
-    with pytest.raises(PathConflictError, match=r"would both be renamed to baz\.py"):
+    with pytest.raises(PathRenameError, match=r"would both be renamed to baz\.py"):
         plan_renames(tmp_path, files, Replacer({"foo": "baz", "bar": "baz"}))
 
 
 def test_invalid_new_name_is_rejected(tmp_path: Path) -> None:
     files = _touch(tmp_path, "training")
-    with pytest.raises(PathConflictError, match="'a/b' is not a valid name"):
+    with pytest.raises(PathRenameError, match="'a/b' is not a valid name"):
         plan_renames(tmp_path, files, Replacer({"training": "a/b"}))
 
 

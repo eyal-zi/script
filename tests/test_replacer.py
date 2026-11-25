@@ -32,10 +32,10 @@ def test_replace_str() -> None:
     assert Replacer({"training": "hello"}).replace_str("training_data.csv") == ("hello_data.csv", 1)
 
 
-@pytest.mark.parametrize("replacements", [{}, {"": "x"}])
-def test_rejects_empty_replacements(replacements: dict[str, str]) -> None:
+@pytest.mark.parametrize("table", [{}, {"": "x"}])
+def test_rejects_empty_tables(table: dict[str, str]) -> None:
     with pytest.raises(ValueError, match="non-empty"):
-        Replacer(replacements)
+        Replacer(table)
 
 
 def test_agrees_with_a_longest_first_alternation() -> None:

@@ -13,6 +13,7 @@ pip install -e .
 ## Usage
 
 ```bash
+cp renames.example.json renames.json                         # then edit the rules
 repo-rename path/to/repo --renames renames.json --dry-run   # preview every change
 repo-rename path/to/repo --renames renames.json             # apply
 ```
@@ -61,7 +62,7 @@ Commit or stash your work first, so you can review the result with `git diff` / 
 - Symlink targets are updated too, so links still resolve after the directories they point into
   are renamed.
 - Binary files (a NUL byte in the first 8000 bytes, like git) keep their contents; only their
-  names change.
+  names change. Binary files that still contain an old name are listed in the output.
 - The renames file itself is never modified, even when it lives inside the repo.
 - All renames are checked before anything is written: if one would overwrite an existing path,
   the run stops and nothing changes.
@@ -77,8 +78,13 @@ Commit or stash your work first, so you can review the result with `git diff` / 
 | `-e, --exclude PATHSPEC` | none           | Leave matching paths alone (`vendor`, `*.lock`). Repeatable. |
 | `-j, --jobs N`           | CPU count      | Number of worker processes.                                  |
 
-Exit codes: `0` success, `1` some files couldn't be rewritten (listed in the output), `2` invalid
-input (bad rules file, not a git repo, conflicting renames). With exit code `2`, nothing is changed.
+Exit codes (`ExitCode` in `cli.py`):
+
+| Code | Meaning                                                                         |
+| ---- | ------------------------------------------------------------------------------- |
+| `0`  | Success.                                                                        |
+| `1`  | The run went ahead, but some files couldn't be rewritten or a path rename failed. |
+| `2`  | Invalid input (bad options or rules file, not a git repo, conflicting renames). Nothing is changed. |
 
 ## Development
 
@@ -100,4 +106,4 @@ Source layout (`src/repo_rename/`):
 | `git.py`      | Listing the repo's files with `git ls-files`                      |
 | `contents.py` | Rewriting file contents in parallel, with atomic writes           |
 | `paths.py`    | Planning, conflict-checking and applying file/directory renames   |
-| `errors/`     | User-facing error types, one module per error                     |
+| `errors.py`   | User-facing error types                                           |
