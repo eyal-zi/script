@@ -10,6 +10,7 @@ from collections.abc import Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from repo_rename.replacer import Replacer
@@ -20,23 +21,25 @@ _BINARY_SNIFF_BYTES = 8000
 _CHUNK_SIZE = 64
 
 
-BINARY = "binary"
-NOT_A_REGULAR_FILE = "not a regular file"  # e.g. a submodule or nested repository
-MISSING = "missing"  # tracked by git but deleted from the work tree
+class SkipReason(Enum):
+    """Why a file's contents were left alone."""
+
+    BINARY = "binary"
+    NOT_A_REGULAR_FILE = "not a regular file"  # e.g. a submodule or nested repository
+    MISSING = "missing"  # tracked by git but deleted from the work tree
 
 
 @dataclass(frozen=True, slots=True)
 class RewriteResult:
     """What happened to one file.
 
-    `replacements` counts the matches found. They were written unless it's a dry run or
-    the file was `skipped` (one of BINARY, NOT_A_REGULAR_FILE, MISSING). `error` says
-    why the file couldn't be processed.
+    `matches` counts the old names found in it. They were replaced unless it's a dry
+    run or the file was `skipped`. `error` says why the file couldn't be processed.
     """
 
     path: Path
-    replacements: int = 0
-    skipped: str | None = None
+    matches: int = 0
+    skipped: SkipReason | None = None
     error: str | None = None
 
 
@@ -82,20 +85,21 @@ class _Rewriter:
         try:
             mode = absolute.lstat().st_mode
         except FileNotFoundError:
-            return RewriteResult(path, skipped=MISSING)
+            return RewriteResult(path, skipped=SkipReason.MISSING)
         if stat.S_ISLNK(mode):
-            count = _rewrite_symlink(absolute, self.replacer, dry_run=self.dry_run)
-            return RewriteResult(path, count)
+            matches = _rewrite_symlink(absolute, self.replacer, dry_run=self.dry_run)
+            return RewriteResult(path, matches=matches)
         if not stat.S_ISREG(mode):
-            return RewriteResult(path, skipped=NOT_A_REGULAR_FILE)
+            return RewriteResult(path, skipped=SkipReason.NOT_A_REGULAR_FILE)
 
         data = absolute.read_bytes()
-        new_data, count = self.replacer.replace(data)
+        # Count the matches in binary files too: the report lists them as left alone.
+        new_data, matches = self.replacer.replace(data)
         if _is_binary(data):
-            return RewriteResult(path, count, skipped=BINARY)
-        if count and not self.dry_run:
+            return RewriteResult(path, matches=matches, skipped=SkipReason.BINARY)
+        if matches and not self.dry_run:
             _atomic_write(absolute, new_data)
-        return RewriteResult(path, count)
+        return RewriteResult(path, matches=matches)
 
 
 # Each worker process receives the rewriter (and its possibly large replacement
@@ -118,16 +122,19 @@ def _is_binary(data: bytes) -> bool:
 
 
 def _rewrite_symlink(link: Path, replacer: Replacer, *, dry_run: bool) -> int:
-    """Point a symlink at the renamed target, so it still resolves after the renames."""
+    """Point a symlink at the renamed target, so it still resolves after the renames.
+
+    Returns the number of matches in the target.
+    """
     # Not Path.readlink(): it normalizes the target ("./a/" -> "a"), changing the link.
-    target, count = replacer.replace_str(os.readlink(link))  # noqa: PTH115
-    if count and not dry_run:
+    target, matches = replacer.replace_str(os.readlink(link))  # noqa: PTH115
+    if matches and not dry_run:
         # tempfile can't create symlinks, so make up an unused sibling name instead.
         temporary = link.with_name(f".{link.name}.{uuid.uuid4().hex}.tmp")
         temporary.symlink_to(target)
         with _removed_on_error(temporary):
             temporary.replace(link)
-    return count
+    return matches
 
 
 def _atomic_write(path: Path, data: bytes) -> None:

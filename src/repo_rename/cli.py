@@ -116,18 +116,18 @@ def _rewrite_with_progress(
 
 
 def _report(results: list[RewriteResult], path_renames: list[PathRename], *, dry_run: bool) -> None:
-    with_matches = [result for result in results if result.replacements]
-    changed = [result for result in with_matches if not result.skipped]
-    left_alone = [result for result in with_matches if result.skipped]
+    with_matches = [result for result in results if result.matches]
+    changed = [result for result in with_matches if result.skipped is None]
+    left_alone = [result for result in with_matches if result.skipped is not None]
     if changed:
-        total = sum(result.replacements for result in changed)
+        total = sum(result.matches for result in changed)
         verb = "Would update" if dry_run else "Updated"
         title = f"{verb} {_plural(len(changed), 'file')} ({_plural(total, 'replacement')}):"
-        _print_section(title, map(_with_replacement_count, changed))
+        _print_section(title, map(_with_match_count, changed))
 
     if left_alone:
         title = f"Left {_plural(len(left_alone), 'file')} alone, still containing old names:"
-        _print_section(title, map(_with_replacement_count, left_alone))
+        _print_section(title, map(_with_match_count, left_alone))
 
     if path_renames:
         verb = "Would rename" if dry_run else "Renamed"
@@ -149,9 +149,11 @@ def _report(results: list[RewriteResult], path_renames: list[PathRename], *, dry
         console.print("Dry run: nothing was written.", style="yellow")
 
 
-def _with_replacement_count(result: RewriteResult) -> Text:
-    """E.g. ``src/app.py (3)``, plus the skip reason (``logo.png (2, binary)``) if any."""
-    details = ", ".join(filter(None, [str(result.replacements), result.skipped]))
+def _with_match_count(result: RewriteResult) -> Text:
+    """E.g. ``src/app.py (3)``, or with the skip reason: ``logo.png (2, binary)``."""
+    details = str(result.matches)
+    if result.skipped is not None:
+        details += f", {result.skipped.value}"
     return Text.assemble(str(result.path), (f" ({details})", "dim"))
 
 
