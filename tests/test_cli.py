@@ -90,7 +90,7 @@ def test_symlink_targets_follow_the_renames(repo: Path) -> None:
     _write(repo, {"training/data.txt": "data\n"})
     (repo / "link").symlink_to("training/data.txt")
     _run(repo, {"training": "hello"})
-    assert os.readlink(repo / "link") == "hello/data.txt"
+    assert os.readlink(repo / "link") == "hello/data.txt"  # noqa: PTH115
     assert (repo / "link").read_text() == "data\n"
 
 
@@ -197,7 +197,7 @@ def _tree(root: Path) -> dict[str, bytes]:
     """Every file under `root` (outside .git) with its contents; symlinks as their target."""
     return {
         path.relative_to(root).as_posix(): (
-            os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()
+            os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()  # noqa: PTH115
         )
         for path in root.rglob("*")
         if (path.is_symlink() or path.is_file()) and ".git" not in path.relative_to(root).parts

@@ -103,7 +103,7 @@ _worker_rewriter: _Rewriter | None = None
 
 
 def _init_worker(rewriter: _Rewriter) -> None:
-    global _worker_rewriter
+    global _worker_rewriter  # noqa: PLW0603
     _worker_rewriter = rewriter
 
 
@@ -119,7 +119,7 @@ def _is_binary(data: bytes) -> bool:
 def _rewrite_symlink(link: Path, replacer: Replacer, *, dry_run: bool) -> int:
     """Point a symlink at the renamed target, so it still resolves after the renames."""
     # Not Path.readlink(): it normalizes the target ("./a/" -> "a"), changing the link.
-    target, count = replacer.replace_str(os.readlink(link))
+    target, count = replacer.replace_str(os.readlink(link))  # noqa: PTH115
     if count and not dry_run:
         # tempfile can't create symlinks, so make up an unused sibling name instead.
         temporary = link.with_name(f".{link.name}.{uuid.uuid4().hex}.tmp")
