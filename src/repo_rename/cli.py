@@ -1,7 +1,7 @@
 """Command-line interface: ``repo-rename REPO [--renames FILE] [OPTIONS]``."""
 
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from enum import IntEnum
 from pathlib import Path
 from typing import Annotated, NoReturn
@@ -89,14 +89,10 @@ def main(
         _fail(f"{error}\nNothing was changed.", exit_code=ExitCode.INVALID_INPUT)
 
     results = _rewrite_with_progress(repo, files, replacer, dry_run=dry_run, jobs=jobs)
-    if not dry_run:
-        try:
-            apply_renames(repo, path_renames)
-        except OSError as error:
-            _fail(f"renaming paths failed: {error}", exit_code=ExitCode.PARTIAL_FAILURE)
+    failed_moves = {} if dry_run else apply_renames(repo, path_renames)
 
-    _report(results, path_renames, dry_run=dry_run)
-    if any(result.error for result in results):
+    _report(results, path_renames, failed_moves, dry_run=dry_run)
+    if failed_moves or any(result.error for result in results):
         raise typer.Exit(ExitCode.PARTIAL_FAILURE)
 
 
@@ -115,7 +111,13 @@ def _rewrite_with_progress(
     return list(progress)
 
 
-def _report(results: list[RewriteResult], path_renames: list[PathRename], *, dry_run: bool) -> None:
+def _report(
+    results: list[RewriteResult],
+    path_renames: list[PathRename],
+    failed_moves: Mapping[PathRename, str],
+    *,
+    dry_run: bool,
+) -> None:
     with_matches = [result for result in results if result.matches]
     changed = [result for result in with_matches if result.skipped is None]
     left_alone = [result for result in with_matches if result.skipped is not None]
@@ -129,19 +131,20 @@ def _report(results: list[RewriteResult], path_renames: list[PathRename], *, dry
         title = f"Left {_plural(len(left_alone), 'file')} alone, still containing old names:"
         _print_section(title, map(_with_match_count, left_alone))
 
-    if path_renames:
+    renamed = [rename for rename in path_renames if rename not in failed_moves]
+    if renamed:
         verb = "Would rename" if dry_run else "Renamed"
         lines = (
             Text.assemble(str(rename.source), (" → ", "dim"), str(rename.final_path))
-            for rename in sorted(path_renames, key=lambda rename: rename.source)
+            for rename in sorted(renamed, key=lambda rename: rename.source)
         )
-        _print_section(f"{verb} {_plural(len(path_renames), 'path')}:", lines)
+        _print_section(f"{verb} {_plural(len(renamed), 'path')}:", lines)
 
     for result in results:
         if result.error:
-            error_console.print(
-                Text.assemble(("Failed: ", "red"), f"{result.path}: {result.error}")
-            )
+            _report_failure(f"{result.path}: {result.error}")
+    for rename, reason in failed_moves.items():
+        _report_failure(f"{rename.source} → {rename.destination}: {reason}")
 
     if not (changed or path_renames):
         console.print("Nothing to rename.")
@@ -155,6 +158,10 @@ def _with_match_count(result: RewriteResult) -> Text:
     if result.skipped is not None:
         details += f", {result.skipped.value}"
     return Text.assemble(str(result.path), (f" ({details})", "dim"))
+
+
+def _report_failure(message: str) -> None:
+    error_console.print(Text.assemble(("Failed: ", "red"), message))
 
 
 def _print_section(title: str, lines: Iterable[Text]) -> None:

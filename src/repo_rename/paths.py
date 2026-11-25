@@ -6,7 +6,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_rename.errors import PathRenameError
+from repo_rename.errors import PathRenameError, os_error_reason
 from repo_rename.replacer import Replacer
 
 _FORBIDDEN_NAME_CHARS = frozenset(f"\0/{os.sep}{os.altsep or ''}")
@@ -53,10 +53,20 @@ def plan_renames(root: Path, files: Collection[Path], replacer: Replacer) -> lis
     return renames
 
 
-def apply_renames(root: Path, renames: Iterable[PathRename]) -> None:
-    """Perform the moves of a plan made by `plan_renames`, in its order."""
+def apply_renames(root: Path, renames: Iterable[PathRename]) -> dict[PathRename, str]:
+    """Perform the moves of a plan made by `plan_renames`, in its order.
+
+    A move that fails doesn't stop the others: each one only needs its parent directory
+    to still have its old name, which the plan's order guarantees. Returns the reason
+    for each move that failed.
+    """
+    failures: dict[PathRename, str] = {}
     for rename in renames:
-        (root / rename.source).rename(root / rename.destination)
+        try:
+            (root / rename.source).rename(root / rename.destination)
+        except OSError as error:  # noqa: PERF203 - next to a rename, the try costs nothing
+            failures[rename] = os_error_reason(error)
+    return failures
 
 
 def _parent_directories(files: Iterable[Path]) -> set[Path]:

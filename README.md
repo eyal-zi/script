@@ -66,6 +66,8 @@ Commit or stash your work first, so you can review the result with `git diff` / 
 - The rules file itself is never modified, even when it lives inside the repo.
 - All renames are checked before anything is written: if one would overwrite an existing path,
   the run stops and nothing changes.
+- If a file can't be rewritten or a path can't be renamed (no permission, say), everything else
+  still is, and each failure is listed.
 
 ## Options
 

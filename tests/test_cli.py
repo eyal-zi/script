@@ -159,15 +159,18 @@ def test_unreadable_files_are_reported_and_the_rest_still_renamed(repo: Path) ->
 
 
 @_needs_file_permissions
-def test_failed_path_rename_is_reported(repo: Path) -> None:
-    _write(repo, {"locked/training.txt": "unrelated"})
+def test_failed_path_rename_is_reported_and_the_rest_still_done(repo: Path) -> None:
+    _write(repo, {"a.txt": "training", "training.md": "", "locked/training.txt": "unrelated"})
     (repo / "locked").chmod(0o555)  # its entries can't be renamed
     try:
         result = _run(repo, {"training": "hello"}, expected_exit=ExitCode.PARTIAL_FAILURE)
     finally:
         (repo / "locked").chmod(0o755)
 
-    assert "renaming paths failed" in result.stderr
+    assert "Updated 1 file (1 replacement):\n  a.txt (1)" in result.stdout
+    assert "Renamed 1 path:\n  training.md → hello.md" in result.stdout
+    assert "Failed: locked/training.txt → locked/hello.txt: Permission denied" in result.stderr
+    assert sorted(_tree(repo)) == ["a.txt", "hello.md", "locked/training.txt"]
 
 
 def test_parallel_run_rewrites_every_file(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
