@@ -8,12 +8,13 @@ A rule like ``data_loader -> batch_reader`` should also turn ``DataLoader`` into
 import re
 from collections.abc import Callable, Iterator, Mapping
 
-# Letters and digits, optionally joined by single "_", "-" or " ". Other names (with
-# dots, slashes, leading underscores, ...) are only ever renamed exactly as written.
-_IDENTIFIER = re.compile(r"[A-Za-z0-9]+(?:[_\- ][A-Za-z0-9]+)*")
+# What may separate the words of a name: "_", "-" or " ".
+_SEPARATOR = re.compile(r"[_\- ]")
+# Letters and digits, optionally joined by single separators. Other names (with dots,
+# slashes, leading underscores, ...) are only ever renamed exactly as written.
+_IDENTIFIER = re.compile(rf"[A-Za-z0-9]+(?:{_SEPARATOR.pattern}[A-Za-z0-9]+)*")
 # Word boundaries inside camelCase and PascalCase, e.g. "dataLoader", "HTTPServer".
 _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
-_SEPARATOR = re.compile(r"[_\- ]")
 
 # Order matters: when several styles spell the old name identically (always true for
 # one-word names), the first of them decides how the new name is spelled.
