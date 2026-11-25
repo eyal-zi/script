@@ -18,8 +18,10 @@ class Replacer:
     """
 
     def __init__(self, table: Mapping[str, str]) -> None:
-        if not table or "" in table:
-            raise ValueError("table must map non-empty strings")
+        if not table:
+            raise ValueError("table must not be empty")
+        if "" in table:
+            raise ValueError("table keys must not be empty strings")
         self._table = {old.encode(): new.encode() for old, new in table.items()}
         self._pattern = re.compile(_trie_regex(self._table))
 

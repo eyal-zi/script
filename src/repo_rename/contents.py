@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from repo_rename.errors import os_error_reason
 from repo_rename.replacer import Replacer
 
 # Same heuristic as git: a NUL byte near the start of a file means it's binary.
@@ -77,7 +78,7 @@ class _Rewriter:
         try:
             return self._rewrite(path)
         except OSError as error:
-            return RewriteResult(path, error=error.strerror or str(error))
+            return RewriteResult(path, error=os_error_reason(error))
 
     def _rewrite(self, path: Path) -> RewriteResult:
         """Replace matches in a file, or in a symlink's target. Raises OSError."""

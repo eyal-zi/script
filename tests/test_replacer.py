@@ -32,9 +32,12 @@ def test_replace_str() -> None:
     assert Replacer({"training": "hello"}).replace_str("training_data.csv") == ("hello_data.csv", 1)
 
 
-@pytest.mark.parametrize("table", [{}, {"": "x"}])
-def test_rejects_empty_tables(table: dict[str, str]) -> None:
-    with pytest.raises(ValueError, match="non-empty"):
+@pytest.mark.parametrize(
+    ("table", "message"),
+    [({}, "table must not be empty"), ({"": "x"}, "keys must not be empty")],
+)
+def test_rejects_invalid_tables(table: dict[str, str], message: str) -> None:
+    with pytest.raises(ValueError, match=message):
         Replacer(table)
 
 

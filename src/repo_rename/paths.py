@@ -45,7 +45,7 @@ def plan_renames(root: Path, files: Collection[Path], replacer: Replacer) -> lis
         if _is_valid_name(new_names[path]):
             renames.append(PathRename(path, _rename_every_part(path, replacer)))
         else:
-            problems.append(f"cannot rename {path}: {new_names[path]!r} is not a valid name")
+            problems.append(f"{path}: {new_names[path]!r} is not a valid name")
 
     problems += _collision_problems(root, renames)
     if problems:
@@ -93,7 +93,7 @@ def _collision_problems(root: Path, renames: Iterable[PathRename]) -> list[str]:
             continue
         claimed[rename.destination] = rename.source
         if _is_taken(root / rename.destination, other_than=root / rename.source):
-            problems.append(f"cannot rename {rename.source}: {rename.destination} already exists")
+            problems.append(f"{rename.source}: {rename.destination} already exists")
     return problems
 
 

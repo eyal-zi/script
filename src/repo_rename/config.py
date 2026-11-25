@@ -1,12 +1,13 @@
 """Load and validate the rules file: a JSON array of ``{"old": ..., "new": ...}`` objects."""
 
 from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError, model_validator
 
-from repo_rename.errors import ConfigError
+from repo_rename.errors import ConfigError, os_error_reason
 
 _NonEmptyStr = Annotated[str, Field(min_length=1)]
 
@@ -44,15 +45,14 @@ def load_rules(path: Path) -> dict[str, str]:
     try:
         rules = RuleList.model_validate_json(path.read_bytes()).root
     except OSError as error:
-        raise ConfigError(f"cannot read {path}: {error.strerror}") from error
+        raise ConfigError(f"cannot read {path}: {os_error_reason(error)}") from error
     except ValidationError as error:
-        raise ConfigError(f"invalid {path}:\n{_format_issues(error)}") from None
+        raise ConfigError(f"invalid {path}:", _issue_lines(error)) from error
     return {rule.old: rule.new for rule in rules}
 
 
-def _format_issues(error: ValidationError) -> str:
-    """Format validation issues one per line, e.g. ``  0.new: Field required``."""
-    return "\n".join(
-        f"  {'.'.join(map(str, issue['loc'])) or '<root>'}: {issue['msg']}"
-        for issue in error.errors(include_url=False)
-    )
+def _issue_lines(error: ValidationError) -> Iterator[str]:
+    """Describe each validation issue on one line, e.g. ``0.new: Field required``."""
+    for issue in error.errors(include_url=False):
+        location = ".".join(map(str, issue["loc"])) or "<root>"
+        yield f"{location}: {issue['msg']}"
