@@ -8,7 +8,7 @@ class RepoRenameError(Exception):
 
 
 class ConfigError(RepoRenameError):
-    """The renames file can't be read or is invalid."""
+    """The rules file can't be read or is invalid."""
 
 
 class GitError(RepoRenameError):

@@ -14,15 +14,18 @@ _FORBIDDEN_NAME_CHARS = frozenset(f"\0/{os.sep}{os.altsep or ''}")
 
 @dataclass(frozen=True, slots=True)
 class PathRename:
-    """A file or directory whose own name changes. Paths are relative to the repo."""
+    """A file or directory whose own name changes. Paths are relative to the repo.
 
-    source: Path  # current path
-    target: Path  # final path, once its parent directories have been renamed too
+    `final_path` is where it ends up once its parent directories are renamed too.
+    """
+
+    source: Path
+    final_path: Path
 
     @property
-    def renamed_in_place(self) -> Path:
+    def destination(self) -> Path:
         """`source` with only its last component renamed: the single move to perform."""
-        return self.source.with_name(self.target.name)
+        return self.source.with_name(self.final_path.name)
 
 
 def plan_renames(root: Path, files: Collection[Path], replacer: Replacer) -> list[PathRename]:
@@ -53,7 +56,7 @@ def plan_renames(root: Path, files: Collection[Path], replacer: Replacer) -> lis
 def apply_renames(root: Path, renames: Iterable[PathRename]) -> None:
     """Perform the moves of a plan made by `plan_renames`, in its order."""
     for rename in renames:
-        (root / rename.source).rename(root / rename.renamed_in_place)
+        (root / rename.source).rename(root / rename.destination)
 
 
 def _parent_directories(files: Iterable[Path]) -> set[Path]:
@@ -82,15 +85,15 @@ def _collision_problems(root: Path, renames: Iterable[PathRename]) -> list[str]:
     problems = []
     claimed: dict[Path, Path] = {}  # destination -> the source moving there
     for rename in renames:
-        destination = rename.renamed_in_place
-        if destination in claimed:
+        if rename.destination in claimed:
             problems.append(
-                f"{claimed[destination]} and {rename.source} would both be renamed to {destination}"
+                f"{claimed[rename.destination]} and {rename.source}"
+                f" would both be renamed to {rename.destination}"
             )
             continue
-        claimed[destination] = rename.source
-        if _is_taken(root / destination, other_than=root / rename.source):
-            problems.append(f"cannot rename {rename.source}: {destination} already exists")
+        claimed[rename.destination] = rename.source
+        if _is_taken(root / rename.destination, other_than=root / rename.source):
+            problems.append(f"cannot rename {rename.source}: {rename.destination} already exists")
     return problems
 
 

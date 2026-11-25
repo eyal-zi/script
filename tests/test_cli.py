@@ -102,7 +102,7 @@ def test_symlink_targets_follow_the_renames(repo: Path) -> None:
     assert (repo / "link").read_text() == "data\n"
 
 
-def test_renames_file_inside_the_repo_is_left_alone(repo: Path) -> None:
+def test_rules_file_inside_the_repo_is_left_alone(repo: Path) -> None:
     config = repo / "renames.json"
     config.write_text('[{"old": "training", "new": "hello"}]')
     original_config = config.read_bytes()
@@ -142,7 +142,7 @@ def test_rejects_a_directory_outside_git(tmp_path: Path) -> None:
     assert "not a git repository" in result.stderr
 
 
-def test_rejects_an_invalid_renames_file(repo: Path) -> None:
+def test_rejects_an_invalid_rules_file(repo: Path) -> None:
     result = _run(repo, {"same": "same"}, expected_exit=ExitCode.INVALID_INPUT)
     assert "are both 'same'" in result.stderr
 

@@ -40,7 +40,7 @@ class RewriteResult:
     error: str | None = None
 
 
-def rewrite_files(
+def iter_rewrites(
     root: Path,
     paths: Sequence[Path],
     replacer: Replacer,
@@ -48,9 +48,10 @@ def rewrite_files(
     dry_run: bool = False,
     jobs: int = 1,
 ) -> Iterator[RewriteResult]:
-    """Rewrite every file in `paths` (relative to `root`), yielding results in order.
+    """Rewrite each file in `paths` (relative to `root`), yielding the results in order.
 
-    Uses up to `jobs` processes. With `dry_run`, matches are counted but not written.
+    Lazy: nothing is read or written until the results are consumed. Uses up to `jobs`
+    processes. With `dry_run`, matches are counted but not written.
     """
     rewriter = _Rewriter(root, replacer, dry_run=dry_run)
     workers = min(jobs, math.ceil(len(paths) / _CHUNK_SIZE))
