@@ -5,9 +5,10 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner, Result
 
-from repo_rename.cli import app
+from repo_rename.cli import ExitCode, app
 
 runner = CliRunner()
 
@@ -23,9 +24,8 @@ def test_renames_contents_files_and_directories(repo: Path) -> None:
     )
     _git(repo, "add", "src")  # a mix of tracked and untracked files
 
-    result = _run(repo, {"training": "hello"})
+    _run(repo, {"training": "hello"})
 
-    assert result.exit_code == 0, result.output
     assert _tree(repo) == {
         "src/hello/hello_job.py": b"class HelloJob:\n    HELLO_DIR = 'hellos'\n",
         "docs/Hello.md": b"Run hello-job before prehello.\n",
@@ -54,9 +54,8 @@ def test_never_touches_the_git_directory(repo: Path) -> None:
     _git(repo, "branch", "training")
     git_dir_before = _tree(repo / ".git")
 
-    result = _run(repo, {"training": "hello"})
+    _run(repo, {"training": "hello"})
 
-    assert result.exit_code == 0, result.output
     assert _tree(repo / ".git") == git_dir_before
     assert (repo / "hello.py").read_text() == "hello = 1\n"
 
@@ -82,8 +81,9 @@ def test_excluded_pathspecs_are_left_alone(repo: Path) -> None:
 
 def test_binary_files_are_renamed_but_not_rewritten(repo: Path) -> None:
     _write(repo, {"training.bin": b"\0training\0"})
-    _run(repo, {"training": "hello"})
+    result = _run(repo, {"training": "hello"})
     assert _tree(repo) == {"hello.bin": b"\0training\0"}
+    assert "alone, still containing old names:\n  training.bin (1, binary)" in result.stdout
 
 
 def test_symlink_targets_follow_the_renames(repo: Path) -> None:
@@ -97,13 +97,13 @@ def test_symlink_targets_follow_the_renames(repo: Path) -> None:
 def test_renames_file_inside_the_repo_is_left_alone(repo: Path) -> None:
     config = repo / "renames.json"
     config.write_text('[{"old": "training", "new": "hello"}]')
+    original_config = config.read_bytes()
     _write(repo, {"a.txt": "training"})
 
     result = runner.invoke(app, [str(repo), "--renames", str(config)])
 
-    assert result.exit_code == 0, result.output
-    assert _tree(repo) == {"renames.json": config.read_bytes(), "a.txt": b"hello"}
-    assert b"training" in config.read_bytes()
+    assert result.exit_code == ExitCode.SUCCESS, result.output
+    assert _tree(repo) == {"renames.json": original_config, "a.txt": b"hello"}
 
 
 def test_dry_run_reports_but_changes_nothing(repo: Path) -> None:
@@ -112,7 +112,6 @@ def test_dry_run_reports_but_changes_nothing(repo: Path) -> None:
 
     result = _run(repo, {"training": "hello"}, "--dry-run")
 
-    assert result.exit_code == 0, result.output
     assert _tree(repo) == before
     assert "training/a.py (1)" in result.stdout
     assert "training → hello" in result.stdout
@@ -122,9 +121,8 @@ def test_conflicting_rename_aborts_before_changing_anything(repo: Path) -> None:
     _write(repo, {"training.py": "training\n", "hello.py": "hello\n"})
     before = _tree(repo)
 
-    result = _run(repo, {"training": "hello"})
+    result = _run(repo, {"training": "hello"}, expected_exit=ExitCode.INVALID_INPUT)
 
-    assert result.exit_code == 2
     assert "hello.py already exists" in result.stderr
     assert _tree(repo) == before
 
@@ -132,28 +130,57 @@ def test_conflicting_rename_aborts_before_changing_anything(repo: Path) -> None:
 def test_rejects_a_directory_outside_git(tmp_path: Path) -> None:
     plain = tmp_path / "plain"
     plain.mkdir()
-    result = _run(plain, {"training": "hello"})
-    assert result.exit_code == 2
+    result = _run(plain, {"training": "hello"}, expected_exit=ExitCode.INVALID_INPUT)
     assert "not a git repository" in result.stderr
 
 
 def test_rejects_an_invalid_renames_file(repo: Path) -> None:
-    result = _run(repo, {"same": "same"})
-    assert result.exit_code == 2
+    result = _run(repo, {"same": "same"}, expected_exit=ExitCode.INVALID_INPUT)
     assert "are both 'same'" in result.stderr
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read files without permission")
+def test_unreadable_files_are_reported_and_the_rest_still_renamed(repo: Path) -> None:
+    _write(repo, {"a.txt": "training", "locked.txt": "training"})
+    (repo / "locked.txt").chmod(0)
+
+    result = _run(repo, {"training": "hello"}, expected_exit=ExitCode.PARTIAL_FAILURE)
+
+    assert "Failed: locked.txt" in result.stderr
+    assert (repo / "a.txt").read_text() == "hello"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write to read-only directories")
+def test_failed_path_rename_is_reported(repo: Path) -> None:
+    _write(repo, {"locked/training.txt": "unrelated"})
+    (repo / "locked").chmod(0o555)  # its entries can't be renamed
+    try:
+        result = _run(repo, {"training": "hello"}, expected_exit=ExitCode.PARTIAL_FAILURE)
+    finally:
+        (repo / "locked").chmod(0o755)
+
+    assert "renaming paths failed" in result.stderr
+
+
 def test_parallel_run_rewrites_every_file(repo: Path) -> None:
+    # Several times contents._CHUNK_SIZE files, so the work really is split across processes.
     _write(repo, {f"pkg/training_{i}.py": f"training = {i}\n" for i in range(300)})
-    result = _run(repo, {"training": "hello"}, "--jobs", "4")
-    assert result.exit_code == 0, result.output
+    _run(repo, {"training": "hello"}, "--jobs", "4")
     assert _tree(repo) == {f"pkg/hello_{i}.py": f"hello = {i}\n".encode() for i in range(300)}
 
 
-def _run(repo: Path, renames: dict[str, str], *options: str) -> Result:
+def _run(
+    repo: Path,
+    rules: dict[str, str],
+    *options: str,
+    expected_exit: ExitCode = ExitCode.SUCCESS,
+) -> Result:
+    """Run the CLI on `repo` with `rules`, checking its exit code (showing its output if wrong)."""
     config = repo.parent / "renames.json"
-    config.write_text(json.dumps([{"old": old, "new": new} for old, new in renames.items()]))
-    return runner.invoke(app, [str(repo), "--renames", str(config), *options])
+    config.write_text(json.dumps([{"old": old, "new": new} for old, new in rules.items()]))
+    result = runner.invoke(app, [str(repo), "--renames", str(config), *options])
+    assert result.exit_code == expected_exit, result.output
+    return result
 
 
 def _write(root: Path, files: dict[str, str] | dict[str, bytes]) -> None:

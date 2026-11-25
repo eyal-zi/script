@@ -2,14 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from repo_rename.config import load_renames
+from repo_rename.config import load_rules
 from repo_rename.errors import ConfigError
 
 
 def test_loads_rules_in_order(tmp_path: Path) -> None:
     path = tmp_path / "renames.json"
     path.write_text('[{"old": "training", "new": "hello"}, {"old": "a", "new": "b"}]')
-    assert list(load_renames(path).items()) == [("training", "hello"), ("a", "b")]
+    assert list(load_rules(path).items()) == [("training", "hello"), ("a", "b")]
 
 
 @pytest.mark.parametrize(
@@ -29,4 +29,4 @@ def test_rejects_invalid_files(tmp_path: Path, content: str, message: str) -> No
     path = tmp_path / "renames.json"
     path.write_text(content)
     with pytest.raises(ConfigError, match=message):
-        load_renames(path)
+        load_rules(path)

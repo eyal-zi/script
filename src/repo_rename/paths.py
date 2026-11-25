@@ -6,7 +6,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo_rename.errors import PathConflictError
+from repo_rename.errors import PathRenameError
 from repo_rename.replacer import Replacer
 
 _FORBIDDEN_NAME_CHARS = frozenset(f"\0/{os.sep}{os.altsep or ''}")
@@ -29,7 +29,7 @@ def plan_renames(root: Path, files: Collection[Path], replacer: Replacer) -> lis
     """Plan renames for `files` and for every directory that contains them.
 
     The plan lists the deepest paths first, so every move happens while its parent
-    directory still has its old name. Raises PathConflictError, before anything is
+    directory still has its old name. Raises PathRenameError, before anything is
     touched, if a rename would overwrite an existing path or create an invalid name.
     """
     directories = _parent_directories(files)
@@ -44,9 +44,9 @@ def plan_renames(root: Path, files: Collection[Path], replacer: Replacer) -> lis
         else:
             problems.append(f"cannot rename {path}: {new_names[path]!r} is not a valid name")
 
-    problems += _collisions(root, renames)
+    problems += _collision_problems(root, renames)
     if problems:
-        raise PathConflictError(problems)
+        raise PathRenameError(problems)
     return renames
 
 
@@ -78,7 +78,7 @@ def _new_names(paths: Iterable[Path], replacer: Replacer) -> dict[Path, str]:
     return new_names
 
 
-def _collisions(root: Path, renames: Iterable[PathRename]) -> list[str]:
+def _collision_problems(root: Path, renames: Iterable[PathRename]) -> list[str]:
     problems = []
     claimed: dict[Path, Path] = {}  # destination -> the source moving there
     for rename in renames:
@@ -89,18 +89,18 @@ def _collisions(root: Path, renames: Iterable[PathRename]) -> list[str]:
             )
             continue
         claimed[destination] = rename.source
-        if _is_taken(root / destination, by=root / rename.source):
+        if _is_taken(root / destination, other_than=root / rename.source):
             problems.append(f"cannot rename {rename.source}: {destination} already exists")
     return problems
 
 
-def _is_taken(path: Path, *, by: Path) -> bool:
-    """Whether something other than `by` exists at `path`.
+def _is_taken(path: Path, *, other_than: Path) -> bool:
+    """Whether something other than `other_than` exists at `path`.
 
-    On case-insensitive file systems, the destination of a case-only rename *is* `by`.
+    On case-insensitive file systems, the destination of a case-only rename *is* `other_than`.
     """
     try:
-        return not os.path.samestat(path.lstat(), by.lstat())
+        return not os.path.samestat(path.lstat(), other_than.lstat())
     except FileNotFoundError:
         return False
 

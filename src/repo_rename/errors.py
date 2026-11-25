@@ -15,7 +15,7 @@ class GitError(RepoRenameError):
     """A git command failed, e.g. because the path isn't inside a git work tree."""
 
 
-class PathConflictError(RepoRenameError):
+class PathRenameError(RepoRenameError):
     """Renaming files or directories would overwrite paths or create invalid names."""
 
     def __init__(self, problems: Iterable[str]) -> None:

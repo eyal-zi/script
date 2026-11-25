@@ -17,10 +17,10 @@ class Replacer:
     encoding are handled, and every byte outside a match is kept exactly as it was.
     """
 
-    def __init__(self, replacements: Mapping[str, str]) -> None:
-        if not replacements or "" in replacements:
-            raise ValueError("replacements must map non-empty strings")
-        self._table = {old.encode(): new.encode() for old, new in replacements.items()}
+    def __init__(self, table: Mapping[str, str]) -> None:
+        if not table or "" in table:
+            raise ValueError("table must map non-empty strings")
+        self._table = {old.encode(): new.encode() for old, new in table.items()}
         self._pattern = re.compile(_trie_regex(self._table))
 
     def replace(self, data: bytes) -> tuple[bytes, int]:
