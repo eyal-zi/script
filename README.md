@@ -18,7 +18,7 @@ repo-rename path/to/repo --renames renames.json --dry-run   # preview every chan
 repo-rename path/to/repo --renames renames.json             # apply
 ```
 
-`renames.json` (the default `--renames` path) is a JSON array of `old`/`new` pairs:
+The rules file (`--renames`, default `renames.json`) is a JSON array of `old`/`new` pairs:
 
 ```json
 [
@@ -63,9 +63,11 @@ Commit or stash your work first, so you can review the result with `git diff` / 
   are renamed.
 - Binary files (a NUL byte in the first 8000 bytes, like git) keep their contents; only their
   names change. Binary files that still contain an old name are listed in the output.
-- The renames file itself is never modified, even when it lives inside the repo.
+- The rules file itself is never modified, even when it lives inside the repo.
 - All renames are checked before anything is written: if one would overwrite an existing path,
   the run stops and nothing changes.
+- If a file can't be rewritten or a path can't be renamed (no permission, say), everything else
+  still is, and each failure is listed.
 
 ## Options
 
@@ -100,7 +102,7 @@ Source layout (`src/repo_rename/`):
 | Module        | Responsibility                                                    |
 | ------------- | ----------------------------------------------------------------- |
 | `cli.py`      | Command-line options, wiring the steps together, output           |
-| `config.py`   | Loading and validating the renames file (pydantic)                |
+| `config.py`   | Loading and validating the rules file (pydantic)                  |
 | `casing.py`   | Case-style variants (`DataLoader`, `DATA_LOADER`, ...)            |
 | `replacer.py` | Single-pass, longest-match replacement of many strings at once    |
 | `git.py`      | Listing the repo's files with `git ls-files`                      |

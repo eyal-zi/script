@@ -54,3 +54,8 @@ def test_invalid_new_name_is_rejected(tmp_path: Path) -> None:
 def test_submodules_are_not_renamed(tmp_path: Path) -> None:
     (tmp_path / "training").mkdir()  # git lists a submodule as if it were a file
     assert plan_renames(tmp_path, [Path("training")], REPLACER) == []
+
+
+def test_deleted_files_are_not_renamed(tmp_path: Path) -> None:
+    # git still lists a tracked file after it's deleted from the work tree
+    assert plan_renames(tmp_path, [Path("training.py")], REPLACER) == []

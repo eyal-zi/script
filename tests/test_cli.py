@@ -3,14 +3,22 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner, Result
 
+from repo_rename import contents
 from repo_rename.cli import ExitCode, app
 
 runner = CliRunner()
+
+# The platform check comes first: os.geteuid doesn't exist on Windows.
+_needs_file_permissions = pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0,
+    reason="file permissions only restrict non-root users on POSIX systems",
+)
 
 
 def test_renames_contents_files_and_directories(repo: Path) -> None:
@@ -90,11 +98,11 @@ def test_symlink_targets_follow_the_renames(repo: Path) -> None:
     _write(repo, {"training/data.txt": "data\n"})
     (repo / "link").symlink_to("training/data.txt")
     _run(repo, {"training": "hello"})
-    assert os.readlink(repo / "link") == "hello/data.txt"
+    assert os.readlink(repo / "link") == "hello/data.txt"  # noqa: PTH115
     assert (repo / "link").read_text() == "data\n"
 
 
-def test_renames_file_inside_the_repo_is_left_alone(repo: Path) -> None:
+def test_rules_file_inside_the_repo_is_left_alone(repo: Path) -> None:
     config = repo / "renames.json"
     config.write_text('[{"old": "training", "new": "hello"}]')
     original_config = config.read_bytes()
@@ -134,12 +142,12 @@ def test_rejects_a_directory_outside_git(tmp_path: Path) -> None:
     assert "not a git repository" in result.stderr
 
 
-def test_rejects_an_invalid_renames_file(repo: Path) -> None:
+def test_rejects_an_invalid_rules_file(repo: Path) -> None:
     result = _run(repo, {"same": "same"}, expected_exit=ExitCode.INVALID_INPUT)
     assert "are both 'same'" in result.stderr
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root can read files without permission")
+@_needs_file_permissions
 def test_unreadable_files_are_reported_and_the_rest_still_renamed(repo: Path) -> None:
     _write(repo, {"a.txt": "training", "locked.txt": "training"})
     (repo / "locked.txt").chmod(0)
@@ -150,23 +158,27 @@ def test_unreadable_files_are_reported_and_the_rest_still_renamed(repo: Path) ->
     assert (repo / "a.txt").read_text() == "hello"
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root can write to read-only directories")
-def test_failed_path_rename_is_reported(repo: Path) -> None:
-    _write(repo, {"locked/training.txt": "unrelated"})
+@_needs_file_permissions
+def test_failed_path_rename_is_reported_and_the_rest_still_done(repo: Path) -> None:
+    _write(repo, {"a.txt": "training", "training.md": "", "locked/training.txt": "unrelated"})
     (repo / "locked").chmod(0o555)  # its entries can't be renamed
     try:
         result = _run(repo, {"training": "hello"}, expected_exit=ExitCode.PARTIAL_FAILURE)
     finally:
         (repo / "locked").chmod(0o755)
 
-    assert "renaming paths failed" in result.stderr
+    assert "Updated 1 file (1 replacement):\n  a.txt (1)" in result.stdout
+    assert "Renamed 1 path:\n  training.md → hello.md" in result.stdout
+    assert "Failed: locked/training.txt → locked/hello.txt: Permission denied" in result.stderr
+    assert sorted(_tree(repo)) == ["a.txt", "hello.md", "locked/training.txt"]
 
 
-def test_parallel_run_rewrites_every_file(repo: Path) -> None:
-    # Several times contents._CHUNK_SIZE files, so the work really is split across processes.
-    _write(repo, {f"pkg/training_{i}.py": f"training = {i}\n" for i in range(300)})
+def test_parallel_run_rewrites_every_file(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Tiny chunks, so these 10 files really are split across the 4 worker processes.
+    monkeypatch.setattr(contents, "_CHUNK_SIZE", 2)
+    _write(repo, {f"pkg/training_{i}.py": f"training = {i}\n" for i in range(10)})
     _run(repo, {"training": "hello"}, "--jobs", "4")
-    assert _tree(repo) == {f"pkg/hello_{i}.py": f"hello = {i}\n".encode() for i in range(300)}
+    assert _tree(repo) == {f"pkg/hello_{i}.py": f"hello = {i}\n".encode() for i in range(10)}
 
 
 def _run(
@@ -197,7 +209,7 @@ def _tree(root: Path) -> dict[str, bytes]:
     """Every file under `root` (outside .git) with its contents; symlinks as their target."""
     return {
         path.relative_to(root).as_posix(): (
-            os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()
+            os.fsencode(os.readlink(path)) if path.is_symlink() else path.read_bytes()  # noqa: PTH115
         )
         for path in root.rglob("*")
         if (path.is_symlink() or path.is_file()) and ".git" not in path.relative_to(root).parts

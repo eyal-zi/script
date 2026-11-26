@@ -30,3 +30,8 @@ def test_rejects_invalid_files(tmp_path: Path, content: str, message: str) -> No
     path.write_text(content)
     with pytest.raises(ConfigError, match=message):
         load_rules(path)
+
+
+def test_reports_a_file_that_cannot_be_read(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"cannot read .*missing\.json: No such file"):
+        load_rules(tmp_path / "missing.json")
