@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "repo-rename"
+version = "0.1.0"
+description = "Rename names across a git repository: file contents, file names and directory names."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6",
+    "rich>=13.7",
+    "typer>=0.16",
+]
+
+[project.scripts]
+repo-rename = "repo_rename.cli:app"
+
+[dependency-groups]
+# Linters are pinned: their new releases add checks, which would fail unchanged code.
+dev = [
+    "mypy==2.4.1",
+    "pytest>=8.3",
+    "ruff==0.17.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_rename"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF", "PT", "N", "RET", "PERF",
+    "PIE", "FURB", "ARG", "ERA", "T20", "PGH", "BLE", "A", "SLF", "TID", "RSE", "C90",
+    "PL", "PTH",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Typer turns every command-line option into a parameter of the command function.
+"src/repo_rename/cli.py" = ["PLR0913", "PLR0917"]
+# One lambda per case style keeps the table uniform.
+"src/repo_rename/casing.py" = ["PLW0108"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+files = ["src", "tests"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+filterwarnings = ["error"]
